@@ -78,7 +78,9 @@ pub struct MemberName {
 
 
 
-fn parse_artists_xml_to_csv(input_file: &str, output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn parse_artists_xml_to_csv(input_file: &str, output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Starting artist XML parsing...");
+    let mut count = 0;
     let file = File::open(input_file)?;
     let gz = GzDecoder::new(file);
     let mut reader = Reader::from_reader(BufReader::new(gz));
@@ -86,33 +88,67 @@ fn parse_artists_xml_to_csv(input_file: &str, output_dir: &str) -> Result<(), Bo
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf)? {
-            Event::Start(ref e) if e.name().as_ref() == b"artist" => {
-                let mut artist_buf = Vec::new();
-                let mut depth = 1;
-                buf.clear();
-                while depth > 0 {
-                    match reader.read_event_into(&mut buf)? {
-                        Event::Start(_) => {
-                            depth += 1;
-                            artist_buf.extend_from_slice(&buf);
+        let event = reader.read_event_into(&mut buf)?;
+        match &event {
+            Event::Start(e) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref());
+                println!("Start tag: {}", tag);
+                if tag == "artist" {
+                    println!("Found <artist> tag");
+                    let mut artist_buf = Vec::new();
+                    let mut depth = 1;
+                    buf.clear();
+                    while depth > 0 {
+                        let inner_event = reader.read_event_into(&mut buf)?;
+                        match &inner_event {
+                            Event::Start(_) => {
+                                depth += 1;
+                                artist_buf.extend_from_slice(&buf);
+                                println!("  Nested start tag, depth: {}", depth);
+                            }
+                            Event::End(e) => {
+                                let end_tag = String::from_utf8_lossy(e.name().as_ref());
+                                println!("  End tag: {}", end_tag);
+                                if end_tag == "artist" {
+                                    depth -= 1;
+                                    println!("  Closing <artist>, depth: {}", depth);
+                                } else {
+                                    depth -= 1;
+                                }
+                                artist_buf.extend_from_slice(&buf);
+                            }
+                            Event::Eof => {
+                                println!("  Reached EOF inside artist");
+                                break;
+                            }
+                            _ => {
+                                artist_buf.extend_from_slice(&buf);
+                            }
                         }
-                        Event::End(ref e) if e.name().as_ref() == b"artist" => {
-                            depth -= 1;
-                            artist_buf.extend_from_slice(&buf);
+                        buf.clear();
+                    }
+                    match from_reader::<_, Artist>(artist_buf.as_slice()) {
+                        Ok(artist) => {
+                            count += 1;
+                            println!("Parsed artist #{}: {:?}", count, artist);
                         }
-                        Event::Eof => break,
-                        _ => {
-                            artist_buf.extend_from_slice(&buf);
+                        Err(e) => {
+                            println!("Error parsing artist: {}", e);
                         }
                     }
-                    buf.clear();
                 }
-                let artist: Artist = from_reader(artist_buf.as_slice())?;
-                // Use artist struct as needed
             }
-            Event::Eof => break,
-            _ => {}
+            Event::End(e) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref());
+                println!("End tag: {}", tag);
+            }
+            Event::Eof => {
+                println!("Reached EOF");
+                break;
+            }
+            _ => {
+                println!("Other event: {:?}", event);
+            }
         }
         buf.clear();
     }
