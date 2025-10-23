@@ -1,0 +1,1 @@
+- never use reader.trim_text(); it does not exist in the quickxml version
