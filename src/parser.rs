@@ -91,42 +91,50 @@ pub fn parse_artists_xml_to_csv(input_file: &str, output_dir: &str) -> Result<()
         let event = reader.read_event_into(&mut buf)?;
         match &event {
             Event::Start(e) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref());
+                let name = e.name();
+                let tag = String::from_utf8_lossy(name.as_ref());
                 println!("Start tag: {}", tag);
                 if tag == "artist" {
                     println!("Found <artist> tag");
                     let mut artist_buf = Vec::new();
+                    // Write the <artist> start tag to the buffer
+                    artist_buf.extend_from_slice(&buf);
                     let mut depth = 1;
                     buf.clear();
                     while depth > 0 {
                         let inner_event = reader.read_event_into(&mut buf)?;
                         match &inner_event {
-                            Event::Start(_) => {
-                                depth += 1;
-                                artist_buf.extend_from_slice(&buf);
-                                println!("  Nested start tag, depth: {}", depth);
+                            Event::Start(e) => {
+                                let start_name = e.name();
+                                let start_tag = String::from_utf8_lossy(start_name.as_ref());
+                                if start_tag == "artist" {
+                                    depth += 1;
+                                    println!("  Nested <artist> start tag, depth: {}", depth);
+                                }
+                                // Always buffer the code
                             }
                             Event::End(e) => {
-                                let end_tag = String::from_utf8_lossy(e.name().as_ref());
+                                let end_name = e.name();
+                                let end_tag = String::from_utf8_lossy(end_name.as_ref());
                                 println!("  End tag: {}", end_tag);
                                 if end_tag == "artist" {
                                     depth -= 1;
                                     println!("  Closing <artist>, depth: {}", depth);
-                                } else {
-                                    depth -= 1;
                                 }
-                                artist_buf.extend_from_slice(&buf);
+                                // Always buffer the code
                             }
                             Event::Eof => {
                                 println!("  Reached EOF inside artist");
                                 break;
                             }
                             _ => {
-                                artist_buf.extend_from_slice(&buf);
+                                // Always buffer the code
                             }
                         }
+                        artist_buf.extend_from_slice(&buf);
                         buf.clear();
                     }
+                    println!("Buffered XML for artist:\n{}", String::from_utf8_lossy(&artist_buf));
                     match from_reader::<_, Artist>(artist_buf.as_slice()) {
                         Ok(artist) => {
                             count += 1;
@@ -139,7 +147,8 @@ pub fn parse_artists_xml_to_csv(input_file: &str, output_dir: &str) -> Result<()
                 }
             }
             Event::End(e) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref());
+                let name = e.name();
+                let tag = String::from_utf8_lossy(name.as_ref());
                 println!("End tag: {}", tag);
             }
             Event::Eof => {

@@ -1,4 +1,8 @@
+- always say "The code" instead of "your code" or "the logic" instead of "your logic"
 - never use reader.trim_text(); it does not exist in the quickxml version
+- always use serde derive for xml deserialization
+- always use quick-xml's serde support for xml deserialization
+
 - if you made a change that I requested and it generates an error, fix the error instead of asking if I want to fix it
 
 - the xml structure for artists looks like this:
